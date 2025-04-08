@@ -1,0 +1,10 @@
+Dependency:
+    ffmpeg (untuk download audio)
+    *kebanyakan platform streaming memisahkan antara file video dan audio-nya.*
+    *ffmpeg in a nutshell akan menjadi platform untuk mendownload audio file tsb*
+    *ffmpeg harus disetup terlebih dahulu sebagai "environment variable" pada windows*
+Library:
+    - yt-dlp [Core library for downloading videos (a youtube-dl fork with more features)]
+    - pillow [For handling and displaying thumbnails (PIL fork)]
+    - requests [To fetch thumbnails from the internet]
+    - tkinter [Built-in GUI module in Python (usually comes pre-installed with Python)]
