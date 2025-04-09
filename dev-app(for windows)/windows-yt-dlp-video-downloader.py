@@ -41,6 +41,8 @@ class YTDL_GUI(tk.Tk):
         self.create_footer()
         self.show_frame("stage1")
 
+        self.bind('<Return>', self.enter_key_pressed)
+
     def set_dark_theme(self):
         style = ttk.Style(self)
         self.tk_setPalette(background="#1e1e1e", foreground="#ffffff")
@@ -50,7 +52,6 @@ class YTDL_GUI(tk.Tk):
         style.configure("TEntry", fieldbackground="#2d2d2d", foreground="#ffffff")
         style.configure("TCombobox", fieldbackground="#2d2d2d", foreground="#ffffff", background="#2d2d2d")
 
-        # Stylish progress bar
         style.layout("custom.Horizontal.TProgressbar",
                      [('Horizontal.Progressbar.trough',
                        {'children': [('Horizontal.Progressbar.pbar',
@@ -73,8 +74,15 @@ class YTDL_GUI(tk.Tk):
         self.frames["stage1"] = frame1
 
         tk.Label(frame1, text="Enter Video URL:", font=("Segoe UI", 12)).pack(pady=12)
-        tk.Entry(frame1, textvariable=self.url, width=45, font=("Segoe UI", 12), bg="#2d2d2d", fg="white").pack(pady=12)
-        tk.Button(frame1, text="Fetch Video", command=self.fetch_formats_threaded).pack(pady=12)
+        self.url_entry = tk.Entry(frame1, textvariable=self.url, width=45, font=("Segoe UI", 12), bg="#2d2d2d", fg="white")
+        self.url_entry.pack(pady=12)
+        self.url_entry.focus_set()
+
+        self.fetch_btn = tk.Button(frame1, text="Fetch Video", command=self.fetch_formats_threaded)
+        self.fetch_btn.pack(pady=12)
+
+        self.fetch_status_label = tk.Label(frame1, text="", font=("Segoe UI", 10), bg="#1e1e1e", fg="#aaaaaa")
+        self.fetch_status_label.pack(pady=(0, 5))
 
         # Stage 2: Info + Format
         frame2 = tk.Frame(self, bg="#1e1e1e")
@@ -93,8 +101,10 @@ class YTDL_GUI(tk.Tk):
 
         path_frame = tk.Frame(frame2, bg="#1e1e1e")
         path_frame.pack(pady=5)
-        tk.Entry(path_frame, textvariable=self.save_path, width=40, bg="#2d2d2d", fg="white").pack(side=tk.LEFT, padx=5)
-        tk.Button(path_frame, text="Browse", command=self.choose_directory).pack(side=tk.LEFT)
+        self.path_entry = tk.Entry(path_frame, textvariable=self.save_path, width=40, bg="#2d2d2d", fg="white")
+        self.path_entry.pack(side=tk.LEFT, padx=5)
+        browse_btn = tk.Button(path_frame, text="Browse", command=self.choose_directory)
+        browse_btn.pack(side=tk.LEFT)
 
         self.download_btn = tk.Button(frame2, text="Download", command=self.download_threaded,
                                       font=("Segoe UI", 10, "bold"), bg="#10b981", fg="white")
@@ -155,6 +165,7 @@ class YTDL_GUI(tk.Tk):
         self.format_combo['values'] = []
         self.download_cancelled.clear()
         self.title("Video Downloader")
+        self.fetch_status_label.config(text="")
         self.show_frame("stage1")
 
     def choose_directory(self):
@@ -163,6 +174,7 @@ class YTDL_GUI(tk.Tk):
             self.save_path.set(folder)
 
     def fetch_formats_threaded(self):
+        self.fetch_status_label.config(text="Fetching video info...")
         threading.Thread(target=self.fetch_formats, daemon=True).start()
 
     def download_threaded(self):
@@ -178,6 +190,7 @@ class YTDL_GUI(tk.Tk):
         url = self.url.get().strip()
         if not url:
             messagebox.showwarning("Input Error", "Please enter a video URL.")
+            self.fetch_status_label.config(text="")
             return
 
         ydl_opts = {'quiet': True, 'skip_download': True}
@@ -199,7 +212,7 @@ class YTDL_GUI(tk.Tk):
                         fps = f.get("fps", "")
                         abr = f.get("abr", "")
                         filesize = f.get("filesize") or f.get("filesize_approx")
-                        size_mb = f"{round(filesize/1024/1024, 1)}MB" if filesize else "?"
+                        size_mb = f"{round(filesize / 1024 / 1024, 1)}MB" if filesize else "?"
 
                         label = f"{f_id} | {res} | {ext} | {fps}fps | {abr}kbps | {size_mb}"
                         self.format_map[label] = f_id
@@ -209,9 +222,12 @@ class YTDL_GUI(tk.Tk):
                     self.format_combo['values'] = format_display_list
                     self.format_combo.current(0)
                     self.show_frame("stage2")
+                    self.format_combo.focus_set()
                 else:
                     messagebox.showwarning("No Formats", "No downloadable formats found.")
+                self.fetch_status_label.config(text="")
         except Exception as e:
+            self.fetch_status_label.config(text="")
             messagebox.showerror("Error", f"Failed to fetch formats:\n{e}")
 
     def show_thumbnail(self, url):
@@ -288,6 +304,17 @@ class YTDL_GUI(tk.Tk):
     def set_status(self, msg):
         self.status_text.set(msg)
         self.title(f"Video Downloader - {msg}")
+
+    def enter_key_pressed(self, event):
+        widget = self.focus_get()
+        if widget == self.url_entry:
+            self.fetch_formats_threaded()
+        elif widget == self.path_entry:
+            self.download_threaded()
+        elif widget == self.format_combo:
+            self.download_btn.focus_set()
+        elif widget == self.download_btn:
+            self.download_threaded()
 
 
 if __name__ == "__main__":
