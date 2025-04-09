@@ -8,15 +8,10 @@ import os
 import re
 from io import BytesIO
 
+
 def strip_ansi(text):
     ansi_escape = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
     return ansi_escape.sub('', text)
-
-# Fallback for PIL resampling filter (for compatibility)
-try:
-    RESAMPLING = Image.Resampling.LANCZOS
-except AttributeError:
-    RESAMPLING = Image.ANTIALIAS
 
 
 class YTDL_GUI(tk.Tk):
@@ -40,15 +35,16 @@ class YTDL_GUI(tk.Tk):
         self.video_title = tk.StringVar(value="")
 
         self.download_cancelled = threading.Event()
-
-        self.spinner_label = None
         self.spinner_frames = []
-        self.spinner_running = False
+        self.spinner_durations = []
+        self.spinner_job = None
 
         self.set_dark_theme()
         self.create_frames()
         self.create_footer()
         self.show_frame("stage1")
+
+        self.load_spinner("spinner.gif")
 
         self.bind('<Return>', self.enter_key_pressed)
 
@@ -83,8 +79,7 @@ class YTDL_GUI(tk.Tk):
         self.frames["stage1"] = frame1
 
         tk.Label(frame1, text="Enter Video URL:", font=("Segoe UI", 12)).pack(pady=12)
-        self.url_entry = tk.Entry(frame1, textvariable=self.url, width=45, font=("Segoe UI", 12),
-                                  bg="#2d2d2d", fg="white")
+        self.url_entry = tk.Entry(frame1, textvariable=self.url, width=45, font=("Segoe UI", 12), bg="#2d2d2d", fg="white")
         self.url_entry.pack(pady=12)
         self.url_entry.focus_set()
 
@@ -92,12 +87,10 @@ class YTDL_GUI(tk.Tk):
         self.fetch_btn.pack(pady=12)
 
         self.spinner_label = tk.Label(frame1, bg="#1e1e1e")
-        self.spinner_label.pack()
+        self.spinner_label.pack(pady=(5, 5))
 
         self.fetch_status_label = tk.Label(frame1, text="", font=("Segoe UI", 10), bg="#1e1e1e", fg="#aaaaaa")
         self.fetch_status_label.pack(pady=(0, 5))
-
-        self.load_spinner()
 
         # Stage 2: Info + Format
         frame2 = tk.Frame(self, bg="#1e1e1e")
@@ -167,6 +160,11 @@ class YTDL_GUI(tk.Tk):
             f.pack_forget()
         self.frames[stage].pack(expand=True)
 
+        if stage == "stage1":
+            self.animate_spinner()
+        else:
+            self.stop_spinner()
+
     def reset_ui(self):
         self.url.set("")
         self.save_path.set(self.DEFAULT_SAVE_PATH)
@@ -190,7 +188,7 @@ class YTDL_GUI(tk.Tk):
 
     def fetch_formats_threaded(self):
         self.fetch_status_label.config(text="Fetching video info...")
-        self.start_spinner()
+        self.animate_spinner()
         threading.Thread(target=self.fetch_formats, daemon=True).start()
 
     def download_threaded(self):
@@ -205,7 +203,6 @@ class YTDL_GUI(tk.Tk):
     def fetch_formats(self):
         url = self.url.get().strip()
         if not url:
-            self.stop_spinner()
             messagebox.showwarning("Input Error", "Please enter a video URL.")
             self.fetch_status_label.config(text="")
             return
@@ -246,8 +243,6 @@ class YTDL_GUI(tk.Tk):
         except Exception as e:
             self.fetch_status_label.config(text="")
             messagebox.showerror("Error", f"Failed to fetch formats:\n{e}")
-        finally:
-            self.stop_spinner()
 
     def show_thumbnail(self, url):
         try:
@@ -335,31 +330,34 @@ class YTDL_GUI(tk.Tk):
         elif widget == self.download_btn:
             self.download_threaded()
 
-    def load_spinner(self):
+    def load_spinner(self, path):
         try:
-            spinner_path = os.path.join(os.getcwd(), "spinner.gif")
-            image = Image.open(spinner_path)
-            self.spinner_frames = [ImageTk.PhotoImage(img.copy().resize((24, 24), RESAMPLING))
-                                   for img in ImageSequence.Iterator(image)]
+            img = Image.open(path)
+            self.spinner_frames = []
+            self.spinner_durations = []
+            for frame in ImageSequence.Iterator(img):
+                frame = frame.convert("RGBA").resize((32, 32), Image.LANCZOS)
+                self.spinner_frames.append(ImageTk.PhotoImage(frame))
+                duration = frame.info.get("duration", 100)
+                self.spinner_durations.append(duration)
         except Exception as e:
-            print(f"Failed to load spinner.gif: {e}")
+            print(f"Spinner load error: {e}")
+            self.spinner_frames = []
+            self.spinner_durations = []
 
-    def start_spinner(self):
-        self.spinner_running = True
-        self.animate_spinner(0)
-
-    def animate_spinner(self, index):
-        if self.spinner_running and self.spinner_frames:
-            frame = self.spinner_frames[index]
-            self.spinner_label.config(image=frame)
-            next_index = (index + 1) % len(self.spinner_frames)
-            self.after(80, lambda: self.animate_spinner(next_index))
-        else:
-            self.spinner_label.config(image="")
+    def animate_spinner(self, index=0):
+        if not self.spinner_frames:
+            return
+        frame = self.spinner_frames[index]
+        delay = self.spinner_durations[index]
+        self.spinner_label.config(image=frame)
+        self.spinner_job = self.after(delay, self.animate_spinner, (index + 1) % len(self.spinner_frames))
 
     def stop_spinner(self):
-        self.spinner_running = False
-
+        if self.spinner_job:
+            self.after_cancel(self.spinner_job)
+            self.spinner_job = None
+        self.spinner_label.config(image="")
 
 if __name__ == "__main__":
     app = YTDL_GUI()
