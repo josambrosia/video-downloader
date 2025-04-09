@@ -343,9 +343,9 @@ class YTDL_GUI(tk.Tk):
         except Exception as e:
             print(f"Spinner load error: {e}")
             self.spinner_frames = []
-            self.spinner_durations = [] 
+            self.spinner_durations = []
 
-    def animasi_spinner(self, index=0):
+    def animate_spinner(self, index=0):
         if not self.spinner_frames:
             return
         frame = self.spinner_frames[index]
@@ -362,4 +362,3 @@ class YTDL_GUI(tk.Tk):
 if __name__ == "__main__":
     app = YTDL_GUI()
     app.mainloop()
-
